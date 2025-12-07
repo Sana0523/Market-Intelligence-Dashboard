@@ -58,6 +58,7 @@ def create_map_legend(map_object):
             width: 160px; 
             height: 100px; 
             z-index:9999; 
+            color: black;
             background-color: white; 
             opacity: 0.95;
             padding: 15px; 
