@@ -14,7 +14,7 @@ from branca.element import Template, MacroElement
 st.set_page_config(
     page_title="Market Intelligence Dashboard", 
     layout="wide", 
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto" # 'auto' collapses sidebar on mobile
 )
 
 # Expanded Country List
@@ -45,23 +45,55 @@ def get_sentiment_color(score):
 
 def create_map_legend(map_object):
     """
-    Injects a professional CSS/HTML legend into the Folium map.
+    Injects a responsive CSS/HTML legend into the Folium map.
+    Includes Media Queries for Mobile.
     """
     template = """
     {% macro html(this, kwargs) %}
-    <div style="
-        position: fixed; 
-        bottom: 30px; left: 30px; width: 160px; height: 100px; 
-        color: #333;
-        background-color: white; opacity: 0.95;
-        z-index:9999; font-size:12px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-        padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        border: 1px solid #e0e0e0;
-        ">
-        <strong style="font-size:14px; display:block; margin-bottom:5px;">Sentiment Legend</strong>
-        <div style="margin-bottom: 3px;"><i class="fa fa-circle" style="color:#2ecc71"></i>&nbsp; Positive</div>
-        <div style="margin-bottom: 3px;"><i class="fa fa-circle" style="color:#95a5a6"></i>&nbsp; Neutral</div>
-        <div style="margin-bottom: 3px;"><i class="fa fa-circle" style="color:#e74c3c"></i>&nbsp; Negative</div>
+    <style>
+        .map-legend {
+            position: fixed; 
+            bottom: 30px; 
+            left: 30px; 
+            width: 160px; 
+            height: 100px; 
+            z-index:9999; 
+            background-color: white; 
+            opacity: 0.95;
+            padding: 15px; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-size: 12px;
+        }
+        
+        /* Mobile Specific Styles */
+        @media (max-width: 768px) {
+            .map-legend {
+                bottom: 10px;
+                left: auto;
+                right: 10px; /* Move to right on mobile */
+                width: 120px;
+                height: auto;
+                padding: 10px;
+                font-size: 10px; /* Smaller font */
+            }
+            .legend-title {
+                font-size: 12px !important;
+                margin-bottom: 2px !important;
+            }
+            .legend-item {
+                margin-bottom: 2px !important;
+            }
+        }
+    </style>
+    
+    <div class="map-legend">
+        <strong class="legend-title" style="font-size:14px; display:block; margin-bottom:5px;">Sentiment Legend</strong>
+        <div class="legend-item" style="margin-bottom: 3px;"><i class="fa fa-circle" style="color:#2ecc71"></i>&nbsp; Positive</div>
+        <div class="legend-item" style="margin-bottom: 3px;"><i class="fa fa-circle" style="color:#95a5a6"></i>&nbsp; Neutral</div>
+        <div class="legend-item" style="margin-bottom: 3px;"><i class="fa fa-circle" style="color:#e74c3c"></i>&nbsp; Negative</div>
     </div>
     {% endmacro %}
     """
@@ -111,19 +143,37 @@ def analyze_country(args):
 
 # --- Main UI ---
 
-# Custom CSS for a cleaner look
+# Custom CSS for Mobile Optimization
 st.markdown("""
 <style>
+    /* Main Background */
     .stApp {
         background-color: #000002;
     }
+    
+    /* Typography */
     h1 {
         font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
         font-weight: 700;
         color: #2c3e50;
     }
-    div[data-testid="stMetricValue"] {
-        font-size: 24px;
+    
+    /* Mobile-First Adjustments */
+    @media (max-width: 640px) {
+        /* Reduce top padding on mobile */
+        .block-container {
+            padding-top: 2rem;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        /* Make fonts slightly smaller on headers to prevent wrapping */
+        h1 {
+            font-size: 1.5rem;
+        }
+        /* Adjust metric values size */
+        div[data-testid="stMetricValue"] {
+            font-size: 20px !important;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -144,10 +194,6 @@ with st.sidebar:
         - Positive: > 0.05
         - Negative: < -0.05
         - Neutral: -0.05 to 0.05
-        
-        **Subjectivity (TextBlob):**
-        - 0.0: Objective (Fact)
-        - 1.0: Subjective (Opinion)
         """)
 
 # State Management
@@ -156,23 +202,14 @@ if "data" not in st.session_state:
 
 # Analysis Logic
 if analyze_btn:
-    # Professional Status Container
     with st.status("Processing Market Data...", expanded=True) as status:
         st.write("Initializing data pipelines...")
-        
-        # Prepare arguments for parallel execution
         task_args = [(name, info, topic) for name, info in COUNTRIES.items()]
-        
         results = []
-        
         st.write(f"Fetching headlines for: {topic}")
-        # Parallel Execution
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             fetched_data = list(executor.map(analyze_country, task_args))
-        
-        # Filter out None values
         st.session_state.data = [d for d in fetched_data if d is not None]
-        
         status.update(label="Analysis Complete", state="complete", expanded=False)
 
 # --- Dashboard Display ---
@@ -186,31 +223,32 @@ if st.session_state.data:
     with st.container(border=True):
         st.subheader("Executive Summary")
         col_m1, col_m2, col_m3 = st.columns(3)
-        col_m1.metric("Global Sentiment Index", f"{g_avg:.2f}", help="Aggregate VADER Compound Score")
-        col_m2.metric("Subjectivity Index", f"{g_sub:.2f}", help="Aggregate TextBlob Subjectivity Score")
-        col_m3.metric("Topic Analyzed", topic)
+        col_m1.metric("Global Sentiment", f"{g_avg:.2f}", help="VADER Score")
+        col_m2.metric("Subjectivity", f"{g_sub:.2f}", help="TextBlob Score")
+        col_m3.metric("Topic", topic)
     
     # 2. Map and Chart Layout
+    # Note: Streamlit automatically stacks columns on mobile.
     col_map, col_chart = st.columns([3, 2])
 
     with col_map:
         with st.container(border=True):
-            st.subheader("Geospatial Sentiment Distribution")
+            st.subheader("Geospatial Sentiment")
             
             m = folium.Map(location=[25, 10], zoom_start=2, tiles="CartoDB positron")
             
             for index, row in df.iterrows():
                 color = get_sentiment_color(row['Sentiment'])
                 
-                # Clean HTML Popup
+                # Responsive Popup Content
                 html = f"""
-                <div style="font-family: 'Helvetica Neue', Arial; width: 200px;">
-                    <h4 style="margin-bottom:5px; color:#333;">{row['Country']}</h4>
-                    <div style="font-size:12px; color:#555; margin-bottom:10px;">
-                        <b>Sentiment Score:</b> {row['Sentiment']:.2f}
+                <div style="font-family: 'Helvetica Neue', Arial; width: 180px;">
+                    <h4 style="margin-bottom:5px; color:#333; font-size:14px;">{row['Country']}</h4>
+                    <div style="font-size:11px; color:#555; margin-bottom:5px;">
+                        <b>Score:</b> {row['Sentiment']:.2f}
                     </div>
-                    <div style="font-size:11px; color:#777; border-top:1px solid #eee; padding-top:5px;">
-                        <b>Top Keywords:</b><br>{row['Keywords']}
+                    <div style="font-size:10px; color:#777; border-top:1px solid #eee; padding-top:5px;">
+                        {row['Keywords']}
                     </div>
                 </div>
                 """
@@ -218,7 +256,7 @@ if st.session_state.data:
                 folium.CircleMarker(
                     location=row['Coords'],
                     radius=8 + (row['Volume'] * 1.2),
-                    popup=folium.Popup(html, max_width=250),
+                    popup=folium.Popup(html, max_width=200),
                     color=color,
                     fill=True,
                     fill_color=color,
@@ -227,25 +265,25 @@ if st.session_state.data:
                 ).add_to(m)
 
             create_map_legend(m)
-            st_folium(m, width=None, height=500, use_container_width=True)
+            # height=400 is better for mobile than 500
+            st_folium(m, width=None, height=400, use_container_width=True)
 
     with col_chart:
         with st.container(border=True):
             st.subheader("Comparative Analysis")
             
-            # Clean Altair Chart
             c = alt.Chart(df).mark_bar(cornerRadius=2).encode(
                 x=alt.X('Country', sort='-y', axis=alt.Axis(labelAngle=0)),
-                y=alt.Y('Sentiment', scale=alt.Scale(domain=[-1, 1]), axis=alt.Axis(title='Sentiment Score')),
+                y=alt.Y('Sentiment', scale=alt.Scale(domain=[-1, 1]), axis=alt.Axis(title='Score')),
                 color=alt.Color('Sentiment', scale=alt.Scale(domain=[-1, 1], range=['#e74c3c', '#95a5a6', '#2ecc71']), legend=None),
                 tooltip=['Country', 'Sentiment', 'Subjectivity']
-            ).properties(height=450)
+            ).properties(height=350) # Slightly shorter for mobile scrollability
             
             st.altair_chart(c, use_container_width=True)
 
     # 3. Detailed Data Table
     with st.container(border=True):
-        st.subheader("News Feed & Source Data")
+        st.subheader("News Feed")
         
         all_news_items = []
         for item in st.session_state.data:
@@ -254,7 +292,7 @@ if st.session_state.data:
                     "Region": item['Country'],
                     "Sentiment": s,
                     "Headline": h,
-                    "Source Link": l
+                    "Link": l
                 })
                 
         df_news = pd.DataFrame(all_news_items)
@@ -262,10 +300,10 @@ if st.session_state.data:
         st.dataframe(
             df_news,
             column_config={
-                "Source Link": st.column_config.LinkColumn("Article URL", display_text="Read Article"),
-                "Sentiment": st.column_config.NumberColumn(
-                    "Score", format="%.2f"
-                ),
+                "Link": st.column_config.LinkColumn("Link", display_text="Read"),
+                "Sentiment": st.column_config.NumberColumn("Scr", format="%.2f"),
+                "Headline": st.column_config.TextColumn("Headline", width="medium"), 
+                "Region": st.column_config.TextColumn("Reg", width="small")
             },
             use_container_width=True,
             hide_index=True,
