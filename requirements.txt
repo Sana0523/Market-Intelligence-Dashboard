@@ -1,0 +1,9 @@
+streamlit
+folium
+streamlit-folium
+gnews
+textblob
+vaderSentiment
+yake
+altair
+pandas
